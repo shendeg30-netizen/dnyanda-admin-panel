@@ -7,6 +7,7 @@ import FeeManager from "./components/FeeManager";
 import AttendanceView from "./components/AttendanceView";
 import NotificationManager from "./components/NotificationManager";
 import StaffManager from "./components/StaffManager";
+import ReportsView from "./components/ReportsView";
 // App Updates components
 import UploadForm from "./components/UploadForm";
 import UpdateDashboard from "./components/Dashboard";
@@ -23,7 +24,11 @@ import {
   LogOut,
   TrendingUp,
   UserCheck,
-  CircleAlert
+  CircleAlert,
+  FileText,
+  Utensils,
+  Sun,
+  BookOpen
 } from "lucide-react";
 
 function App() {
@@ -31,6 +36,7 @@ function App() {
     sessionStorage.getItem("warden_authenticated") === "true"
   );
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [preselectedCategory, setPreselectedCategory] = useState("MORNING_MESS");
 
   // Global database metrics
   const [students, setStudents] = useState([]);
@@ -88,6 +94,11 @@ function App() {
     setIsAuthenticated(false);
   };
 
+  const handleDashboardSlotClick = (categoryKey) => {
+    setPreselectedCategory(categoryKey);
+    setActiveTab("attendance");
+  };
+
   if (!isAuthenticated) {
     return <Login onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
@@ -98,13 +109,24 @@ function App() {
   const totalFeesCollected = students.reduce((acc, s) => acc + (s.paidFees || 0), 0);
   const totalFeesPending = totalFeesExpected - totalFeesCollected;
 
-  // Today's attendance quick snap
+  // Today's slot-specific stats calculations
   const todayStr = new Date().toISOString().split("T")[0];
   const todayAttendance = attendance.filter(r => r.date === todayStr);
-  const presentCount = todayAttendance.filter(r => r.status === "PRESENT").length;
-  const absentCount = todayAttendance.filter(r => r.status === "ABSENT").length;
-  const tiffinCount = todayAttendance.filter(r => r.status === "TIFFIN").length;
-  const homeCount = todayAttendance.filter(r => r.status === "HOME").length;
+
+  const getSlotStats = (categoryName) => {
+    const logs = todayAttendance.filter(r => r.type === categoryName);
+    const present = logs.filter(r => r.status === "PRESENT").length;
+    const absent = logs.filter(r => r.status === "ABSENT").length;
+    const tiffin = logs.filter(r => r.status === "TIFFIN").length;
+    const home = logs.filter(r => r.status === "HOME").length;
+    const unmarked = totalStudents - logs.length;
+    return { present, absent, tiffin, home, unmarked };
+  };
+
+  const morningStats = getSlotStats("MORNING_MESS");
+  const eveningStats = getSlotStats("EVENING_MESS");
+  const prayerStats = getSlotStats("PRAYER");
+  const studyStats = getSlotStats("STUDY_HALL");
 
   return (
     <div className="app-container">
@@ -155,6 +177,15 @@ function App() {
                 >
                   <CalendarDays size={20} />
                   <span className="nav-link-text">Attendance</span>
+                </a>
+              </li>
+              <li className="nav-item">
+                <a
+                  className={`nav-link ${activeTab === "reports" ? "active" : ""}`}
+                  onClick={() => setActiveTab("reports")}
+                >
+                  <FileText size={20} />
+                  <span className="nav-link-text">Reports</span>
                 </a>
               </li>
               <li className="nav-item">
@@ -213,7 +244,7 @@ function App() {
                 {/* Metrics Cards Grid */}
                 <div className="grid-3">
                   <div className="stat-card">
-                    <div className="stat-icon-wrapper" style={{ background: "rgba(99, 102, 241, 0.15)", color: "#818cf8" }}>
+                    <div className="stat-icon-wrapper" style={{ background: "rgba(99, 102, 241, 0.12)", color: "#4f46e5" }}>
                       <Users size={24} />
                     </div>
                     <div className="stat-info">
@@ -223,7 +254,7 @@ function App() {
                   </div>
 
                   <div className="stat-card">
-                    <div className="stat-icon-wrapper" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981" }}>
+                    <div className="stat-icon-wrapper" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#059669" }}>
                       <TrendingUp size={24} />
                     </div>
                     <div className="stat-info">
@@ -233,7 +264,7 @@ function App() {
                   </div>
 
                   <div className="stat-card">
-                    <div className="stat-icon-wrapper" style={{ background: "rgba(239, 68, 68, 0.15)", color: "#f87171" }}>
+                    <div className="stat-icon-wrapper" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#dc2626" }}>
                       <CircleAlert size={24} />
                     </div>
                     <div className="stat-info">
@@ -243,78 +274,137 @@ function App() {
                   </div>
                 </div>
 
-                <div className="dashboard-grid">
-                  {/* Attendance snapshot */}
-                  <div className="card">
-                    <h2 className="card-title">
-                      <UserCheck size={20} style={{ color: "#34d399", marginRight: "0.25rem" }} /> Today's Attendance Snapshot
-                    </h2>
-                    <p style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
-                      Date: {new Date().toLocaleDateString("en-GB")} (Across all slots logged today)
-                    </p>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem", fontSize: "0.9rem" }}>
-                          <span>Present (P)</span>
-                          <span style={{ fontWeight: "700", color: "#10b981" }}>{presentCount} logs</span>
-                        </div>
-                        <div className="progress-bar-bg" style={{ height: "6px" }}>
-                          <div
-                            className="progress-bar-fill"
-                            style={{
-                              width: `${totalStudents ? (presentCount / (totalStudents * 4)) * 100 : 0}%`,
-                              background: "#10b981"
-                            }}
-                          ></div>
-                        </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                  <h2 className="page-title" style={{ fontSize: "1.4rem", fontWeight: "700" }}>Daily Attendance Slots</h2>
+                  
+                  {/* Detailed Attendance Category Grid (Parity with Mobile App StatDetailCard) */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
+                    {/* Morning Mess */}
+                    <div 
+                      className="card" 
+                      onClick={() => handleDashboardSlotClick("MORNING_MESS")}
+                      style={{ cursor: "pointer", padding: "1.5rem", marginBottom: "0" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem", color: "#ea580c" }}>
+                          <Utensils size={18} /> Morning Mess
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "600" }}>Click to open</span>
                       </div>
-
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem", fontSize: "0.9rem" }}>
-                          <span>Absent (A)</span>
-                          <span style={{ fontWeight: "700", color: "#ef4444" }}>{absentCount} logs</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#10b981", fontWeight: "700" }}>PRESENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{morningStats.present}</div>
                         </div>
-                        <div className="progress-bar-bg" style={{ height: "6px" }}>
-                          <div
-                            className="progress-bar-fill"
-                            style={{
-                              width: `${totalStudents ? (absentCount / (totalStudents * 4)) * 100 : 0}%`,
-                              background: "#ef4444"
-                            }}
-                          ></div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#ef4444", fontWeight: "700" }}>ABSENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{morningStats.absent}</div>
                         </div>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "0.5rem" }}>
-                        <div style={{ background: "rgba(2, 6, 23, 0.3)", padding: "0.75rem", borderRadius: "12px", border: "1px solid rgba(255, 255, 255, 0.03)" }}>
-                          <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "600" }}>TIFFIN (T)</span>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "700", color: "#f59e0b", marginTop: "0.1rem" }}>{tiffinCount} logs</div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#f59e0b", fontWeight: "700" }}>TIFFIN</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{morningStats.tiffin}</div>
                         </div>
-                        <div style={{ background: "rgba(2, 6, 23, 0.3)", padding: "0.75rem", borderRadius: "12px", border: "1px solid rgba(255, 255, 255, 0.03)" }}>
-                          <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "600" }}>HOME (H)</span>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "700", color: "#3b82f6", marginTop: "0.1rem" }}>{homeCount} logs</div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#3b82f6", fontWeight: "700" }}>HOME</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{morningStats.home}</div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Quick actions panel */}
-                  <div className="card">
-                    <h2 className="card-title">Quick Tasks</h2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                      <button className="btn btn-primary" onClick={() => setActiveTab("students")}>
-                        Register New Student
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setActiveTab("fees")}>
-                        Record Fee Receipt
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setActiveTab("attendance")}>
-                        View Attendance Sheets
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setActiveTab("updates")}>
-                        Publish App Updates
-                      </button>
+                    {/* Evening Mess */}
+                    <div 
+                      className="card" 
+                      onClick={() => handleDashboardSlotClick("EVENING_MESS")}
+                      style={{ cursor: "pointer", padding: "1.5rem", marginBottom: "0" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem", color: "#2563eb" }}>
+                          <Utensils size={18} /> Evening Mess
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "600" }}>Click to open</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#10b981", fontWeight: "700" }}>PRESENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{eveningStats.present}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#ef4444", fontWeight: "700" }}>ABSENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{eveningStats.absent}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#f59e0b", fontWeight: "700" }}>TIFFIN</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{eveningStats.tiffin}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#3b82f6", fontWeight: "700" }}>HOME</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{eveningStats.home}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Prayer */}
+                    <div 
+                      className="card" 
+                      onClick={() => handleDashboardSlotClick("PRAYER")}
+                      style={{ cursor: "pointer", padding: "1.5rem", marginBottom: "0" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem", color: "#16a34a" }}>
+                          <Sun size={18} /> Prayer
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "600" }}>Click to open</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#10b981", fontWeight: "700" }}>PRESENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{prayerStats.present}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#ef4444", fontWeight: "700" }}>ABSENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{prayerStats.absent}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#f59e0b", fontWeight: "700" }}>TIFFIN</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{prayerStats.tiffin}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#3b82f6", fontWeight: "700" }}>HOME</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{prayerStats.home}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Study Hall */}
+                    <div 
+                      className="card" 
+                      onClick={() => handleDashboardSlotClick("STUDY_HALL")}
+                      style={{ cursor: "pointer", padding: "1.5rem", marginBottom: "0" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem", color: "#7c3aed" }}>
+                          <BookOpen size={18} /> Study Hall
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "600" }}>Click to open</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#10b981", fontWeight: "700" }}>PRESENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{studyStats.present}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#ef4444", fontWeight: "700" }}>ABSENT</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{studyStats.absent}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#f59e0b", fontWeight: "700" }}>TIFFIN</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{studyStats.tiffin}</div>
+                        </div>
+                        <div style={{ background: "#f8fafc", padding: "0.5rem", borderRadius: "8px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#3b82f6", fontWeight: "700" }}>HOME</div>
+                          <div style={{ fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>{studyStats.home}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -323,7 +413,8 @@ function App() {
 
             {activeTab === "students" && <StudentManager />}
             {activeTab === "fees" && <FeeManager />}
-            {activeTab === "attendance" && <AttendanceView />}
+            {activeTab === "attendance" && <AttendanceView initialCategory={preselectedCategory} />}
+            {activeTab === "reports" && <ReportsView />}
             {activeTab === "credentials" && <StaffManager />}
             {activeTab === "notifications" && <NotificationManager />}
             

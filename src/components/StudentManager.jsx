@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ref, onValue, set, update, remove, get } from "firebase/database";
 import { db } from "../firebase";
-import { Search, UserPlus, Edit2, Trash2, X } from "lucide-react";
+import { Search, UserPlus, Edit2, Trash2, X, Eye, EyeOff } from "lucide-react";
 
 export default function StudentManager() {
   const [students, setStudents] = useState([]);
@@ -30,6 +30,17 @@ export default function StudentManager() {
   // Auto-generated fields for Add dialog
   const [genId, setGenId] = useState("");
   const [genPassword, setGenPassword] = useState("");
+  
+  // Edit password and visibility state
+  const [editPassword, setEditPassword] = useState("");
+  const [visiblePasswords, setVisiblePasswords] = useState({});
+  
+  const togglePasswordVisibility = (studentId) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [studentId]: !prev[studentId]
+    }));
+  };
 
   useEffect(() => {
     const studentsRef = ref(db, "students");
@@ -109,6 +120,7 @@ export default function StudentManager() {
     setAadharNo(student.aadharNo || "");
     setOtherInfo(student.otherInfo || "");
     setTotalFees(student.totalFees?.toString() || "");
+    setEditPassword(student.password || "123456");
     setIsEditOpen(true);
   };
 
@@ -169,6 +181,7 @@ export default function StudentManager() {
         address: address.trim(),
         aadharNo: aadharNo.trim(),
         otherInfo: otherInfo.trim(),
+        password: editPassword.trim(),
         totalFees: parseFloat(totalFees) || 0.0
       };
 
@@ -272,6 +285,7 @@ export default function StudentManager() {
                   <th>Room No</th>
                   <th>Class</th>
                   <th>Mobile</th>
+                  <th>Password</th>
                   <th>Aadhar No</th>
                   <th>Actions</th>
                 </tr>
@@ -284,6 +298,21 @@ export default function StudentManager() {
                     <td>Room {student.roomNo}</td>
                     <td>{student.className}</td>
                     <td>{student.personalMobile || student.parentMobile || "-"}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                        <span style={{ fontFamily: visiblePasswords[student.id] ? "inherit" : "monospace" }}>
+                          {visiblePasswords[student.id] ? student.password : "••••••"}
+                        </span>
+                        <button 
+                          className="btn-icon" 
+                          onClick={() => togglePasswordVisibility(student.id)}
+                          style={{ padding: "0.2rem" }}
+                          title={visiblePasswords[student.id] ? "Hide Password" : "Show Password"}
+                        >
+                          {visiblePasswords[student.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </td>
                     <td>{student.aadharNo || "-"}</td>
                     <td>
                       <div className="action-icons-group">
@@ -400,6 +429,11 @@ export default function StudentManager() {
                 <div className="form-group">
                   <label className="form-label">Full Name</label>
                   <input type="text" className="form-input" value={name} onChange={(e) => setName(e.target.value)} required />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Login Password</label>
+                  <input type="text" className="form-input" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} required />
                 </div>
 
                 <div className="form-row">

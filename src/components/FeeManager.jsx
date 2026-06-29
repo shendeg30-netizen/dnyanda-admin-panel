@@ -14,6 +14,16 @@ export default function FeeManager() {
   const [isPayOpen, setIsPayOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  
+  // Monthly Report picker state
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  
+  const currentMonthIndex = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const monthsArray = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  
+  const [reportMonthName, setReportMonthName] = useState(monthsArray[currentMonthIndex]);
+  const [reportYear, setReportYear] = useState(currentYear.toString());
 
   // Add Payment form states
   const [amount, setAmount] = useState("");
@@ -70,13 +80,12 @@ export default function FeeManager() {
     setAmount("");
     setPaymentMethod("Cash");
     setNote("");
-    // Default fee month to current month & year
     const currentMonthIndex = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     setFeeMonth(`${months[currentMonthIndex]} ${currentYear}`);
     setPaymentDate(new Date().toISOString().split("T")[0]);
-    // Auto-generate receipt number: R-YYYYMMDD-HHMMSS
+    
     const now = new Date();
     const formattedDate = now.toISOString().slice(0,10).replace(/-/g,"");
     const formattedTime = now.toTimeString().slice(0,8).replace(/:/g,"");
@@ -109,17 +118,14 @@ export default function FeeManager() {
         receiptNo: receiptNo.trim()
       };
 
-      // Save fee payment
       await set(ref(db, `fees/${recordId}`), newFeeRecord);
 
-      // Update student paid fees
       const updatedPaidFees = (selectedStudent.paidFees || 0.0) + payAmount;
       await update(ref(db, `students/${selectedStudent.id}`), {
         paidFees: updatedPaidFees
       });
 
       setIsPayOpen(false);
-      // Auto-trigger receipt download for the Warden!
       generateReceiptPDF(selectedStudent, newFeeRecord);
     } catch (err) {
       console.error(err);
@@ -131,20 +137,18 @@ export default function FeeManager() {
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
-      format: "a5" // Standard receipt size
+      format: "a5"
     });
 
-    // Outer frame border
-    doc.setDrawColor(99, 102, 241); // indigo borders
+    doc.setDrawColor(79, 70, 229);
     doc.setLineWidth(1);
-    doc.rect(5, 5, 138, 200); // A5 is 148 x 210
+    doc.rect(5, 5, 138, 200);
     
-    doc.setDrawColor(226, 232, 240); // subtle double inner line
+    doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
     doc.rect(7, 7, 134, 196);
 
-    // Title / Header
-    doc.setFillColor(15, 23, 42); // slate fill
+    doc.setFillColor(15, 23, 42);
     doc.rect(8, 8, 132, 25, "F");
     
     doc.setTextColor(255, 255, 255);
@@ -157,7 +161,6 @@ export default function FeeManager() {
     doc.setTextColor(148, 163, 184);
     doc.text("Official Fee Payment Receipt", 74, 25, { align: "center" });
 
-    // Receipt details block
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -166,7 +169,6 @@ export default function FeeManager() {
     const formattedDate = new Date(record.date).toLocaleDateString("en-GB");
     doc.text(`Date: ${formattedDate}`, 105, 45);
 
-    // Student Info Panel
     doc.setDrawColor(226, 232, 240);
     doc.setFillColor(248, 250, 252);
     doc.rect(10, 52, 128, 36, "FD");
@@ -180,15 +182,13 @@ export default function FeeManager() {
     doc.text(`Room No: ${student.roomNo}`, 14, 80);
     doc.text(`Class: ${student.className}`, 75, 80);
 
-    // Payment details table header
-    doc.setFillColor(99, 102, 241);
+    doc.setFillColor(79, 70, 229);
     doc.rect(10, 95, 128, 8, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.text("Description / Fee Month", 14, 100);
     doc.text("Amount", 112, 100);
 
-    // Payment details table body
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "normal");
     doc.text(`Hostel Accommodation Fees - ${record.feeMonth}`, 14, 112);
@@ -196,11 +196,9 @@ export default function FeeManager() {
     doc.setFont("helvetica", "bold");
     doc.text(`INR ${record.amount.toFixed(2)}`, 112, 112);
 
-    // Divider line
     doc.setDrawColor(226, 232, 240);
     doc.line(10, 120, 138, 120);
 
-    // Payment Meta info
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(`Payment Method: ${record.paymentMethod}`, 14, 128);
@@ -208,7 +206,6 @@ export default function FeeManager() {
       doc.text(`Notes: ${record.note}`, 14, 134);
     }
 
-    // Totals Box
     doc.setFillColor(241, 245, 249);
     doc.rect(80, 145, 58, 20, "F");
     doc.setTextColor(15, 23, 42);
@@ -216,10 +213,9 @@ export default function FeeManager() {
     doc.setFontSize(10);
     doc.text("TOTAL PAID", 84, 151);
     doc.setFontSize(12);
-    doc.setTextColor(99, 102, 241);
+    doc.setTextColor(79, 70, 229);
     doc.text(`INR ${record.amount.toFixed(2)}`, 84, 160);
 
-    // Signature Block
     doc.setDrawColor(148, 163, 184);
     doc.line(15, 185, 55, 185);
     doc.line(93, 185, 133, 185);
@@ -230,12 +226,124 @@ export default function FeeManager() {
     doc.text("Student Signature", 35, 190, { align: "center" });
     doc.text("Authorized Signature", 113, 190, { align: "center" });
 
-    // Thank you message
     doc.setFont("helvetica", "italic");
     doc.setFontSize(9);
     doc.text("Thank you for your payment!", 74, 200, { align: "center" });
 
     doc.save(`Receipt_${student.name.replace(/ /g,"_")}_${record.feeMonth.replace(/ /g,"_")}.pdf`);
+  };
+
+  const generateMonthlyFeeReport = (monthName, yearString) => {
+    const fullMonthQuery = `${monthName} ${yearString}`;
+    
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    doc.setFillColor(79, 70, 229);
+    doc.rect(15, 15, 180, 20, "F");
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Dnyanda Hostel - Fee Report", 20, 28);
+
+    doc.setTextColor(51, 65, 85);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Status Report for Period: ${fullMonthQuery}`, 15, 45);
+    
+    const dateGenerated = new Date().toLocaleDateString("en-GB");
+    doc.text(`Generated on: ${dateGenerated}`, 150, 45);
+
+    const col1X = 15;
+    const col2X = 30;
+    const col3X = 100;
+    const col4X = 130;
+    const col5X = 165;
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(15, 52, 180, 10, "F");
+    doc.setTextColor(71, 85, 105);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("No.", col1X + 2, 58);
+    doc.text("Student Name", col2X + 2, 58);
+    doc.text("Room No", col3X + 2, 58);
+    doc.text("Status", col4X + 2, 58);
+    doc.text("Paid Amount", col5X + 2, 58);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.line(15, 62, 195, 62);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(51, 65, 85);
+    
+    let y = 68;
+    const rowHeight = 10;
+    const pageHeight = 280;
+
+    students.forEach((student, index) => {
+      if (y > pageHeight - 15) {
+        doc.addPage();
+        doc.setFillColor(79, 70, 229);
+        doc.rect(15, 15, 180, 15, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(`Monthly Fee Report - ${fullMonthQuery} (Continued)`, 20, 25);
+        
+        doc.setFillColor(241, 245, 249);
+        doc.rect(15, 35, 180, 10, "F");
+        doc.setTextColor(71, 85, 105);
+        doc.text("No.", col1X + 2, 41);
+        doc.text("Student Name", col2X + 2, 41);
+        doc.text("Room No", col3X + 2, 41);
+        doc.text("Status", col4X + 2, 41);
+        doc.text("Paid Amount", col5X + 2, 41);
+        
+        doc.setDrawColor(226, 232, 240);
+        doc.line(15, 45, 195, 45);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(51, 65, 85);
+        y = 51;
+      }
+
+      const record = feeRecords.find(r => r.studentId === student.id && r.feeMonth.toLowerCase().includes(fullMonthQuery.toLowerCase()));
+      const isPaid = !!record;
+
+      if (index % 2 !== 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(15, y - 6, 180, rowHeight, "F");
+      }
+
+      doc.text((index + 1).toString(), col1X + 2, y);
+      doc.text(student.name, col2X + 2, y);
+      doc.text(`Room ${student.roomNo}`, col3X + 2, y);
+      
+      if (isPaid) {
+        doc.setTextColor(16, 185, 129);
+        doc.setFont("helvetica", "bold");
+        doc.text("PAID", col4X + 2, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(51, 65, 85);
+        doc.text(`INR ${record.amount.toFixed(2)}`, col5X + 2, y);
+      } else {
+        doc.setTextColor(239, 68, 68);
+        doc.setFont("helvetica", "bold");
+        doc.text("PENDING", col4X + 2, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(51, 65, 85);
+        doc.text("-", col5X + 2, y);
+      }
+
+      y += rowHeight;
+    });
+
+    doc.save(`Fee_Report_${fullMonthQuery.replace(/ /g,"_")}.pdf`);
   };
 
   const filteredStudents = students.filter(s =>
@@ -247,6 +355,9 @@ export default function FeeManager() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Fee Management</h1>
+        <button className="btn btn-secondary" onClick={() => setShowMonthPicker(true)}>
+          <FileText size={18} /> Monthly Report
+        </button>
       </div>
 
       <div className="card" style={{ padding: "1.5rem" }}>
@@ -446,6 +557,59 @@ export default function FeeManager() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setIsHistoryOpen(false)}>CLOSE</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Month Selection Dialog for Monthly Report */}
+      {showMonthPicker && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: "420px" }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Generate Monthly Fee Report</h3>
+              <button className="btn-close" onClick={() => setShowMonthPicker(false)}><X /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ color: "#64748b", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
+                Generate a PDF report of all registered students indicating their fee status (PAID or PENDING) for the selected month.
+              </p>
+              <div className="form-group">
+                <label className="form-label">Select Month</label>
+                <select 
+                  className="form-select" 
+                  value={reportMonthName} 
+                  onChange={(e) => setReportMonthName(e.target.value)}
+                >
+                  {monthsArray.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Select Year</label>
+                <select 
+                  className="form-select" 
+                  value={reportYear} 
+                  onChange={(e) => setReportYear(e.target.value)}
+                >
+                  {[currentYear - 1, currentYear, currentYear + 1].map(y => (
+                    <option key={y} value={y.toString()}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowMonthPicker(false)}>CANCEL</button>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  generateMonthlyFeeReport(reportMonthName, reportYear);
+                  setShowMonthPicker(false);
+                }}
+              >
+                GENERATE REPORT
+              </button>
             </div>
           </div>
         </div>

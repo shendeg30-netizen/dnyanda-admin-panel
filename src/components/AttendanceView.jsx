@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, set, update } from "firebase/database";
 import { db } from "../firebase";
-import { Calendar, Download, RefreshCw } from "lucide-react";
+import { Calendar, Download, RefreshCw, Edit2, Save, CheckSquare } from "lucide-react";
 
-export default function AttendanceView() {
+export default function AttendanceView({ initialCategory }) {
   const [students, setStudents] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
-  const [selectedCategory, setSelectedCategory] = useState("MORNING_MESS");
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || "MORNING_MESS");
+
+  useEffect(() => {
+    if (initialCategory) {
+      setSelectedCategory(initialCategory);
+    }
+  }, [initialCategory]);
   const [loading, setLoading] = useState(true);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const categories = [
     { value: "MORNING_MESS", label: "Morning Mess" },
@@ -53,8 +60,6 @@ export default function AttendanceView() {
 
   // Map students to their attendance status for the selected date and category
   const mappedRecords = students.map(student => {
-    // Find attendance record matching: date = selectedDate, studentId = student.id, type = selectedCategory
-    // Date formats are standard: YYYY-MM-DD
     const record = attendanceRecords.find(r => 
       r.date === selectedDate && 
       r.studentId === student.id && 
@@ -63,7 +68,7 @@ export default function AttendanceView() {
 
     return {
       student,
-      status: record ? record.status : null // PRESENT, ABSENT, TIFFIN, HOME, or null (Not Marked)
+      status: record ? record.status : null // PRESENT, ABSENT, TIFFIN, HOME, or null
     };
   });
 
@@ -85,6 +90,41 @@ export default function AttendanceView() {
       case "TIFFIN": return <span className="badge badge-warning">Tiffin (T)</span>;
       case "HOME": return <span className="badge badge-info">Home (H)</span>;
       default: return <span className="badge">{status}</span>;
+    }
+  };
+
+  const handleMarkStatus = async (studentId, statusValue) => {
+    try {
+      const recordId = `${selectedDate}_${studentId}_${selectedCategory}`;
+      await set(ref(db, `attendance/${recordId}`), {
+        date: selectedDate,
+        studentId,
+        type: selectedCategory,
+        status: statusValue
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to log attendance: " + err.message);
+    }
+  };
+
+  const handleMarkAllPresent = async () => {
+    if (students.length === 0) return;
+    try {
+      const updates = {};
+      students.forEach(student => {
+        const recordId = `${selectedDate}_${student.id}_${selectedCategory}`;
+        updates[`attendance/${recordId}`] = {
+          date: selectedDate,
+          studentId: student.id,
+          type: selectedCategory,
+          status: "PRESENT"
+        };
+      });
+      await update(ref(db), updates);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to mark bulk attendance: " + err.message);
     }
   };
 
@@ -119,13 +159,27 @@ export default function AttendanceView() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Attendance Tracker</h1>
-        <button 
-          className="btn btn-secondary" 
-          onClick={handleExportCSV}
-          disabled={students.length === 0}
-        >
-          <Download size={18} /> Export CSV
-        </button>
+        <div className="page-actions">
+          {isEditMode ? (
+            <>
+              <button className="btn btn-secondary" onClick={handleMarkAllPresent} disabled={students.length === 0}>
+                <CheckSquare size={18} /> Mark All Present
+              </button>
+              <button className="btn btn-primary" onClick={() => setIsEditMode(false)}>
+                <Save size={18} /> Save & Lock
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn btn-secondary" onClick={handleExportCSV} disabled={students.length === 0}>
+                <Download size={18} /> Export CSV
+              </button>
+              <button className="btn btn-primary" onClick={() => setIsEditMode(true)}>
+                <Edit2 size={18} /> Log Attendance
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
@@ -220,7 +274,82 @@ export default function AttendanceView() {
                     <td style={{ fontWeight: "600", color: "white" }}>{item.student.name}</td>
                     <td>Room {item.student.roomNo}</td>
                     <td>{item.student.className}</td>
-                    <td>{getStatusBadge(item.status)}</td>
+                    <td>
+                      {isEditMode ? (
+                        <div style={{ display: "flex", gap: "0.35rem" }}>
+                          <button 
+                            type="button" 
+                            onClick={() => handleMarkStatus(item.student.id, "PRESENT")}
+                            className="btn"
+                            style={{
+                              padding: "0.2rem 0.5rem",
+                              fontSize: "0.75rem",
+                              fontWeight: "700",
+                              borderRadius: "8px",
+                              background: item.status === "PRESENT" ? "#34d399" : "transparent",
+                              color: item.status === "PRESENT" ? "white" : "#64748b",
+                              border: "1px solid " + (item.status === "PRESENT" ? "#34d399" : "rgba(0, 0, 0, 0.08)"),
+                              cursor: "pointer"
+                            }}
+                          >
+                            P
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleMarkStatus(item.student.id, "ABSENT")}
+                            className="btn"
+                            style={{
+                              padding: "0.2rem 0.5rem",
+                              fontSize: "0.75rem",
+                              fontWeight: "700",
+                              borderRadius: "8px",
+                              background: item.status === "ABSENT" ? "#f87171" : "transparent",
+                              color: item.status === "ABSENT" ? "white" : "#64748b",
+                              border: "1px solid " + (item.status === "ABSENT" ? "#f87171" : "rgba(0, 0, 0, 0.08)"),
+                              cursor: "pointer"
+                            }}
+                          >
+                            A
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleMarkStatus(item.student.id, "TIFFIN")}
+                            className="btn"
+                            style={{
+                              padding: "0.2rem 0.5rem",
+                              fontSize: "0.75rem",
+                              fontWeight: "700",
+                              borderRadius: "8px",
+                              background: item.status === "TIFFIN" ? "#fbbf24" : "transparent",
+                              color: item.status === "TIFFIN" ? "white" : "#64748b",
+                              border: "1px solid " + (item.status === "TIFFIN" ? "#fbbf24" : "rgba(0, 0, 0, 0.08)"),
+                              cursor: "pointer"
+                            }}
+                          >
+                            T
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleMarkStatus(item.student.id, "HOME")}
+                            className="btn"
+                            style={{
+                              padding: "0.2rem 0.5rem",
+                              fontSize: "0.75rem",
+                              fontWeight: "700",
+                              borderRadius: "8px",
+                              background: item.status === "HOME" ? "#60a5fa" : "transparent",
+                              color: item.status === "HOME" ? "white" : "#64748b",
+                              border: "1px solid " + (item.status === "HOME" ? "#60a5fa" : "rgba(0, 0, 0, 0.08)"),
+                              cursor: "pointer"
+                            }}
+                          >
+                            H
+                          </button>
+                        </div>
+                      ) : (
+                        getStatusBadge(item.status)
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
