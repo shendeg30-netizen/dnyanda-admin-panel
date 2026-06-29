@@ -1,65 +1,15 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { ref as dbRef, get, set } from "firebase/database";
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { db, storage } from "../firebase";
+import { db } from "../firebase";
 
 export default function UploadForm() {
   const [versionCode, setVersionCode] = useState("");
   const [versionName, setVersionName] = useState("");
+  const [apkUrl, setApkUrl] = useState("");
   const [releaseNotes, setReleaseNotes] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
   
-  const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState("idle"); // idle, processing, success, error
   const [statusMessage, setStatusMessage] = useState("");
-  const [uploadProgress, setUploadProgress] = useState(0);
-
-  const fileInputRef = useRef(null);
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      validateAndSetFile(files[0]);
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      validateAndSetFile(files[0]);
-    }
-  };
-
-  const validateAndSetFile = (file) => {
-    if (!file.name.endsWith(".apk")) {
-      setStatus("error");
-      setStatusMessage("Only Android APK (.apk) files are accepted.");
-      setSelectedFile(null);
-      return;
-    }
-    setSelectedFile(file);
-    setStatus("idle");
-    setStatusMessage("");
-  };
-
-  const removeFile = (e) => {
-    e.stopPropagation();
-    setSelectedFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,81 +24,33 @@ export default function UploadForm() {
       setStatusMessage("Please enter a Version Name.");
       return;
     }
+    if (!apkUrl.trim() || !apkUrl.startsWith("http")) {
+      setStatus("error");
+      setStatusMessage("Please enter a valid direct download URL starting with http:// or https://");
+      return;
+    }
     if (!releaseNotes.trim()) {
       setStatus("error");
       setStatusMessage("Please describe the release notes.");
       return;
     }
-    if (!selectedFile) {
-      setStatus("error");
-      setStatusMessage("Please select an APK file to upload.");
-      return;
-    }
 
     setStatus("processing");
-    setUploadProgress(0);
+    setStatusMessage("Publishing update details to database...");
 
     try {
-      // Step 1: Retrieve current active version metadata to check for old APKs
-      setStatusMessage("Checking database for older version info...");
       const activeUpdateRef = dbRef(db, "app_update");
-      const activeSnapshot = await get(activeUpdateRef);
-
-      if (activeSnapshot.exists()) {
-        const oldData = activeSnapshot.val();
-        const oldCode = oldData.versionCode;
-
-        if (oldCode && oldCode !== vCode) {
-          setStatusMessage(`Deleting old build (update_${oldCode}.apk) from storage...`);
-          const oldStorageRef = storageRef(storage, `app_updates/update_${oldCode}.apk`);
-          try {
-            await deleteObject(oldStorageRef);
-          } catch (deleteError) {
-            // If the old file does not exist in storage (e.g. deleted manually), we skip and proceed
-            console.warn("Could not delete old file, it may not exist:", deleteError.message);
-          }
-        }
-      }
-
-      // Step 2: Upload new APK file to Storage
-      setStatusMessage("Uploading APK to storage...");
-      const newStorageRef = storageRef(storage, `app_updates/update_${vCode}.apk`);
       
-      const downloadUrl = await new Promise((resolve, reject) => {
-        const uploadTask = uploadBytesResumable(newStorageRef, selectedFile);
-        uploadTask.on(
-          "state_changed",
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(Math.round(progress));
-            setStatusMessage(`Uploading: ${Math.round(progress)}%`);
-          },
-          (error) => {
-            reject(error);
-          },
-          async () => {
-            try {
-              setStatusMessage("Generating download URL...");
-              const url = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(url);
-            } catch (urlError) {
-              reject(urlError);
-            }
-          }
-        );
-      });
-
-      // Step 3: Write new update metadata to the database
-      setStatusMessage("Publishing details to database...");
+      // Step 1: Write new update metadata to the database
       const updateData = {
         versionCode: vCode,
         versionName: versionName.trim(),
-        apkUrl: downloadUrl,
+        apkUrl: apkUrl.trim(),
         releaseNotes: releaseNotes.trim()
       };
       await set(activeUpdateRef, updateData);
 
-      // Step 4: Send announcement notification to all users
+      // Step 2: Send announcement notification to all users
       setStatusMessage("Sending system update notification...");
       const notificationId = crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}`;
       const notificationRef = dbRef(db, `notifications/${notificationId}`);
@@ -175,11 +77,8 @@ export default function UploadForm() {
       // Reset form
       setVersionCode("");
       setVersionName("");
+      setApkUrl("");
       setReleaseNotes("");
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     } catch (err) {
       console.error("Publication failed:", err);
       setStatus("error");
@@ -189,9 +88,12 @@ export default function UploadForm() {
 
   return (
     <div className="card">
-      <h2 style={{ marginBottom: "1.5rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+      <h2 style={{ marginBottom: "1rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem" }}>
         <span style={{ fontSize: "1.4rem" }}>📤</span> Publish New Update
       </h2>
+      <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginBottom: "1.5rem", lineHeight: "1.4" }}>
+        To keep updates <strong>100% free</strong> without requiring a paid Firebase billing plan, upload your APK file to <strong>GitHub Releases</strong>, <strong>Dropbox</strong>, or your repo, and paste the direct download link below.
+      </p>
 
       <form onSubmit={handleSubmit}>
         <div className="form-row">
@@ -224,6 +126,22 @@ export default function UploadForm() {
         </div>
 
         <div className="form-group">
+          <label className="form-label">APK Direct Download URL</label>
+          <input
+            type="url"
+            value={apkUrl}
+            onChange={(e) => setApkUrl(e.target.value)}
+            className="form-input"
+            placeholder="e.g., https://github.com/username/repo/raw/main/app-release.apk"
+            disabled={status === "processing"}
+            required
+          />
+          <span style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.25rem", display: "block" }}>
+            Note: Make sure this is a direct download link (when clicked, the file starts downloading automatically).
+          </span>
+        </div>
+
+        <div className="form-group">
           <label className="form-label">Release Notes / What's New</label>
           <textarea
             value={releaseNotes}
@@ -236,56 +154,10 @@ export default function UploadForm() {
           />
         </div>
 
-        <div className="form-group">
-          <label className="form-label">APK Package File</label>
-          <div
-            className={`upload-zone ${isDragging ? "dragging" : ""}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => status !== "processing" && fileInputRef.current?.click()}
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept=".apk"
-              style={{ display: "none" }}
-              disabled={status === "processing"}
-            />
-            
-            <div className="upload-icon">📦</div>
-            <div className="upload-text">
-              {isDragging ? "Drop file here" : "Click to select or drag APK here"}
-            </div>
-            <div className="upload-hint">Only Android package installer files (.apk)</div>
-
-            {selectedFile && (
-              <div className="file-card">
-                <span className="file-icon">📄</span>
-                <div className="file-details">
-                  <div className="file-name">{selectedFile.name}</div>
-                  <div className="file-size">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</div>
-                </div>
-                {status !== "processing" && (
-                  <button type="button" className="btn-remove-file" onClick={removeFile}>
-                    ✕
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
         {status === "processing" && (
-          <div className="progress-container">
-            <div className="progress-header">
-              <span>{statusMessage}</span>
-              <span>{uploadProgress}%</span>
-            </div>
-            <div className="progress-bar-bg">
-              <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }}></div>
-            </div>
+          <div className="toast-msg info" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <div className="spinner" style={{ width: "16px", height: "16px", border: "2px solid #3b82f6", borderTopColor: "transparent" }}></div>
+            <span>{statusMessage}</span>
           </div>
         )}
 
@@ -307,15 +179,9 @@ export default function UploadForm() {
           <button
             type="submit"
             className="btn-primary"
-            disabled={status === "processing" || !selectedFile}
+            disabled={status === "processing" || !apkUrl}
           >
-            {status === "processing" ? (
-              <>
-                <div className="spinner"></div> Publishing...
-              </>
-            ) : (
-              "Publish Update"
-            )}
+            {status === "processing" ? "Publishing..." : "Publish Update"}
           </button>
         </div>
       </form>
