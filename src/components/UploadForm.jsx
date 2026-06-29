@@ -113,79 +113,77 @@ export default function UploadForm() {
       // Step 2: Upload new APK file to Storage
       setStatusMessage("Uploading APK to storage...");
       const newStorageRef = storageRef(storage, `app_updates/update_${vCode}.apk`);
-      const uploadTask = uploadBytesResumable(newStorageRef, selectedFile);
-
-      uploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(Math.round(progress));
-          setStatusMessage(`Uploading: ${Math.round(progress)}%`);
-        },
-        (error) => {
-          console.error("Upload failed:", error);
-          setStatus("error");
-          setStatusMessage(`Upload failed: ${error.message}`);
-        },
-        async () => {
-          try {
-            // Step 3: Get the download URL of the uploaded APK
-            setStatusMessage("Generating download URL...");
-            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-
-            // Step 4: Write new update metadata to the database
-            setStatusMessage("Publishing details to database...");
-            const updateData = {
-              versionCode: vCode,
-              versionName: versionName.trim(),
-              apkUrl: downloadUrl,
-              releaseNotes: releaseNotes.trim()
-            };
-            await set(activeUpdateRef, updateData);
-
-            // Step 5: Send announcement notification to all users
-            setStatusMessage("Sending system update notification...");
-            const notificationId = crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}`;
-            const notificationRef = dbRef(db, `notifications/${notificationId}`);
-            
-            // Format current date as DD/MM/YYYY
-            const today = new Date();
-            const day = String(today.getDate()).padStart(2, '0');
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const year = today.getFullYear();
-            const formattedDate = `${day}/${month}/${year}`;
-
-            const notificationData = {
-              id: notificationId,
-              title: `🚀 App Update Available (v${versionName.trim()})`,
-              message: `A mandatory app update (v${versionName.trim()}) is now available. Click here or check settings to download and install. Release notes: ${releaseNotes.trim()}`,
-              date: formattedDate,
-              timestamp: Date.now()
-            };
-            await set(notificationRef, notificationData);
-
-            setStatus("success");
-            setStatusMessage("Version successfully published! Users will receive the update instantly.");
-            
-            // Reset form
-            setVersionCode("");
-            setVersionName("");
-            setReleaseNotes("");
-            setSelectedFile(null);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = "";
+      
+      const downloadUrl = await new Promise((resolve, reject) => {
+        const uploadTask = uploadBytesResumable(newStorageRef, selectedFile);
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(Math.round(progress));
+            setStatusMessage(`Uploading: ${Math.round(progress)}%`);
+          },
+          (error) => {
+            reject(error);
+          },
+          async () => {
+            try {
+              setStatusMessage("Generating download URL...");
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+            } catch (urlError) {
+              reject(urlError);
             }
-          } catch (err) {
-            console.error("Failed to complete publication:", err);
-            setStatus("error");
-            setStatusMessage(`Publication failed: ${err.message}`);
           }
-        }
-      );
+        );
+      });
+
+      // Step 3: Write new update metadata to the database
+      setStatusMessage("Publishing details to database...");
+      const updateData = {
+        versionCode: vCode,
+        versionName: versionName.trim(),
+        apkUrl: downloadUrl,
+        releaseNotes: releaseNotes.trim()
+      };
+      await set(activeUpdateRef, updateData);
+
+      // Step 4: Send announcement notification to all users
+      setStatusMessage("Sending system update notification...");
+      const notificationId = crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}`;
+      const notificationRef = dbRef(db, `notifications/${notificationId}`);
+      
+      // Format current date as DD/MM/YYYY
+      const today = new Date();
+      const day = String(today.getDate()).padStart(2, '0');
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const year = today.getFullYear();
+      const formattedDate = `${day}/${month}/${year}`;
+
+      const notificationData = {
+        id: notificationId,
+        title: `🚀 App Update Available (v${versionName.trim()})`,
+        message: `A mandatory app update (v${versionName.trim()}) is now available. Click here or check settings to download and install. Release notes: ${releaseNotes.trim()}`,
+        date: formattedDate,
+        timestamp: Date.now()
+      };
+      await set(notificationRef, notificationData);
+
+      setStatus("success");
+      setStatusMessage("Version successfully published! Users will receive the update instantly.");
+      
+      // Reset form
+      setVersionCode("");
+      setVersionName("");
+      setReleaseNotes("");
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (err) {
-      console.error("Preparation failed:", err);
+      console.error("Publication failed:", err);
       setStatus("error");
-      setStatusMessage(`Failed to verify current version: ${err.message}`);
+      setStatusMessage(`Publication failed: ${err.message}`);
     }
   };
 
