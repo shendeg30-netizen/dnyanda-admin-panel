@@ -113,7 +113,7 @@ function App() {
         <div>
           <div className="sidebar-brand">
             <h1 className="brand-logo-text">
-              <span className="logo-badge">D</span>
+              <img src="/dnyanda_logo.png" alt="Dnyanda Logo" style={{ width: "38px", height: "38px", borderRadius: "8px", objectFit: "contain" }} />
               Dnyanda
             </h1>
             <div className="brand-subtitle">Warden Dashboard</div>

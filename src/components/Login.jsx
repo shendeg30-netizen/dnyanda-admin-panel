@@ -47,8 +47,8 @@ export default function Login({ onLoginSuccess }) {
   return (
     <div className="login-container">
       <div className="login-card">
-        <h1 className="login-header-logo" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-          <span className="logo-badge" style={{ width: "48px", height: "48px", borderRadius: "12px", fontSize: "1.6rem" }}>D</span>
+        <h1 className="login-header-logo" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem" }}>
+          <img src="/dnyanda_logo.png" alt="Dnyanda Logo" style={{ width: "52px", height: "52px", borderRadius: "12px", objectFit: "contain" }} />
           Dnyanda
         </h1>
         <h2 className="login-header-subtitle">Warden Admin Portal</h2>
