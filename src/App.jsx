@@ -112,7 +112,10 @@ function App() {
       <aside className="sidebar">
         <div>
           <div className="sidebar-brand">
-            <h1 className="brand-logo-text">Dnyanda</h1>
+            <h1 className="brand-logo-text">
+              <span className="logo-badge">D</span>
+              Dnyanda
+            </h1>
             <div className="brand-subtitle">Warden Dashboard</div>
           </div>
 

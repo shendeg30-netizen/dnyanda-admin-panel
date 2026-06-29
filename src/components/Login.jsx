@@ -47,7 +47,10 @@ export default function Login({ onLoginSuccess }) {
   return (
     <div className="login-container">
       <div className="login-card">
-        <h1 className="login-header-logo">Dnyanda</h1>
+        <h1 className="login-header-logo" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+          <span className="logo-badge" style={{ width: "48px", height: "48px", borderRadius: "12px", fontSize: "1.6rem" }}>D</span>
+          Dnyanda
+        </h1>
         <h2 className="login-header-subtitle">Warden Admin Portal</h2>
         
         <form onSubmit={handleSubmit}>
