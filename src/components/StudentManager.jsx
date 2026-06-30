@@ -25,6 +25,12 @@ const uploadImageToCloudinary = async (file, cloudName, uploadPreset) => {
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "";
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "";
 
+const CLASSES = [
+  "8th", "9th", "10th", "11th", "12th", 
+  "B. Sc.", "B. Com.", "M. Sc.", "M. Com.", 
+  "B. Sc. Agri", "D. Pharm.", "B. Pharm.", "Competative Exam"
+];
+
 export default function StudentManager() {
   const [students, setStudents] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -115,7 +121,7 @@ export default function StudentManager() {
       // Reset other form fields
       setName("");
       setRoomNo("");
-      setClassName("");
+      setClassName("8th");
       setPersonalMobile("");
       setParentMobile("");
       setDob("");
@@ -434,7 +440,16 @@ export default function StudentManager() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Class</label>
-                    <input type="text" className="form-input" value={className} onChange={(e) => setClassName(e.target.value)} required placeholder="B.Sc CS" />
+                    <select 
+                      className="form-select" 
+                      value={className} 
+                      onChange={(e) => setClassName(e.target.value)} 
+                      required
+                    >
+                      {CLASSES.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -561,7 +576,16 @@ export default function StudentManager() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Class</label>
-                    <input type="text" className="form-input" value={className} onChange={(e) => setClassName(e.target.value)} required />
+                    <select 
+                      className="form-select" 
+                      value={className} 
+                      onChange={(e) => setClassName(e.target.value)} 
+                      required
+                    >
+                      {CLASSES.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

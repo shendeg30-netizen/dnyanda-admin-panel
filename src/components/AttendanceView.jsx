@@ -72,6 +72,29 @@ export default function AttendanceView({ initialCategory }) {
     };
   });
 
+  const CLASS_ORDER = [
+    "8th", "9th", "10th", "11th", "12th", 
+    "B. Sc.", "B. Com.", "M. Sc.", "M. Com.", 
+    "B. Sc. Agri", "D. Pharm.", "B. Pharm.", "Competative Exam"
+  ];
+
+  const sortedRecords = [...mappedRecords].sort((a, b) => {
+    const classA = (a.student.className || "").trim();
+    const classB = (b.student.className || "").trim();
+    
+    const indexA = CLASS_ORDER.indexOf(classA);
+    const indexB = CLASS_ORDER.indexOf(classB);
+    
+    const finalIdxA = indexA !== -1 ? indexA : CLASS_ORDER.length;
+    const finalIdxB = indexB !== -1 ? indexB : CLASS_ORDER.length;
+    
+    if (finalIdxA !== finalIdxB) {
+      return finalIdxA - finalIdxB;
+    }
+    
+    return (a.student.name || "").localeCompare(b.student.name || "");
+  });
+
   // Aggregate stats
   const stats = mappedRecords.reduce((acc, curr) => {
     if (!curr.status) acc.unmarked++;
@@ -135,7 +158,7 @@ export default function AttendanceView({ initialCategory }) {
     const filename = `Attendance_${categoryLabel.replace(/ /g,"_")}_${selectedDate}.csv`;
 
     const headers = ["Student ID", "Name", "Room No", "Class", "Status"];
-    const rows = mappedRecords.map(item => [
+    const rows = sortedRecords.map(item => [
       item.student.id,
       item.student.name,
       `Room ${item.student.roomNo}`,
@@ -268,7 +291,7 @@ export default function AttendanceView({ initialCategory }) {
                 </tr>
               </thead>
               <tbody>
-                {mappedRecords.map(item => (
+                {sortedRecords.map(item => (
                   <tr key={item.student.id}>
                     <td style={{ fontWeight: "700", color: "#818cf8" }}>{item.student.id}</td>
                     <td style={{ fontWeight: "600", color: "white" }}>{item.student.name}</td>
