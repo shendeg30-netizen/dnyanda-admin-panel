@@ -76,7 +76,7 @@ export default function Login({ onLoginSuccess }) {
           )}
 
           <div style={{ marginTop: "2rem" }}>
-            <button type="submit" className="btn-primary" style={{ width: "100%" }} disabled={loading}>
+            <button type="submit" className="login-submit-btn" disabled={loading}>
               {loading ? (
                 <>
                   <div className="spinner"></div> Authenticating...

@@ -1,7 +1,29 @@
 import React, { useState, useEffect } from "react";
 import { ref, onValue, set, update, remove, get } from "firebase/database";
 import { db } from "../firebase";
-import { Search, UserPlus, Edit2, Trash2, X, Eye, EyeOff } from "lucide-react";
+import { Search, UserPlus, Edit2, Trash2, X, Eye, EyeOff, Settings, Camera } from "lucide-react";
+
+const uploadImageToCloudinary = async (file, cloudName, uploadPreset) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", uploadPreset);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.error?.message || "Failed to upload image to Cloudinary");
+  }
+
+  const data = await res.json();
+  return data.secure_url;
+};
+
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "";
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "";
 
 export default function StudentManager() {
   const [students, setStudents] = useState([]);
@@ -12,7 +34,7 @@ export default function StudentManager() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  
+
   // Form states
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [name, setName] = useState("");
@@ -27,6 +49,11 @@ export default function StudentManager() {
   const [otherInfo, setOtherInfo] = useState("");
   const [totalFees, setTotalFees] = useState("");
   
+  // Photo states
+  const [profileFile, setProfileFile] = useState(null);
+  const [profilePreview, setProfilePreview] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
   // Auto-generated fields for Add dialog
   const [genId, setGenId] = useState("");
   const [genPassword, setGenPassword] = useState("");
@@ -121,6 +148,8 @@ export default function StudentManager() {
     setOtherInfo(student.otherInfo || "");
     setTotalFees(student.totalFees?.toString() || "");
     setEditPassword(student.password || "123456");
+    setProfileFile(null);
+    setProfilePreview(student.profilePhoto || "");
     setIsEditOpen(true);
   };
 
@@ -134,6 +163,16 @@ export default function StudentManager() {
     if (!name.trim()) return;
 
     try {
+      let photoUrl = "";
+      if (profileFile) {
+        if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+          alert("Please configure Cloudinary environment variables (VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET) first!");
+          return;
+        }
+        setUploadingPhoto(true);
+        photoUrl = await uploadImageToCloudinary(profileFile, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET);
+      }
+
       const studentData = {
         id: genId,
         name: name.trim(),
@@ -148,7 +187,8 @@ export default function StudentManager() {
         otherInfo: otherInfo.trim(),
         password: genPassword,
         totalFees: parseFloat(totalFees) || 0.0,
-        paidFees: 0.0
+        paidFees: 0.0,
+        profilePhoto: photoUrl
       };
 
       // Save Student
@@ -157,10 +197,14 @@ export default function StudentManager() {
       // Update last_registration_id counter
       await set(ref(db, "metadata/last_registration_id"), genId);
 
+      setProfileFile(null);
+      setProfilePreview("");
       setIsAddOpen(false);
     } catch (err) {
       console.error(err);
       alert("Failed to add student: " + err.message);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -169,6 +213,16 @@ export default function StudentManager() {
     if (!name.trim() || !selectedStudent) return;
 
     try {
+      let photoUrl = selectedStudent.profilePhoto || "";
+      if (profileFile) {
+        if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+          alert("Please configure Cloudinary environment variables (VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET) first!");
+          return;
+        }
+        setUploadingPhoto(true);
+        photoUrl = await uploadImageToCloudinary(profileFile, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET);
+      }
+
       const updatedData = {
         ...selectedStudent,
         name: name.trim(),
@@ -182,14 +236,19 @@ export default function StudentManager() {
         aadharNo: aadharNo.trim(),
         otherInfo: otherInfo.trim(),
         password: editPassword.trim(),
-        totalFees: parseFloat(totalFees) || 0.0
+        totalFees: parseFloat(totalFees) || 0.0,
+        profilePhoto: photoUrl
       };
 
       await set(ref(db, `students/${selectedStudent.id}`), updatedData);
+      setProfileFile(null);
+      setProfilePreview("");
       setIsEditOpen(false);
     } catch (err) {
       console.error(err);
       alert("Failed to update student: " + err.message);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -294,7 +353,22 @@ export default function StudentManager() {
                 {filteredStudents.map(student => (
                   <tr key={student.id}>
                     <td style={{ fontWeight: "700", color: "#818cf8" }}>{student.id}</td>
-                    <td style={{ fontWeight: "600", color: "white" }}>{student.name}</td>
+                    <td style={{ fontWeight: "600", color: "white" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        {student.profilePhoto ? (
+                          <img 
+                            src={student.profilePhoto} 
+                            alt={student.name} 
+                            style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover", border: "1.5px solid rgba(255,255,255,0.15)" }} 
+                          />
+                        ) : (
+                          <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "rgba(129, 140, 248, 0.15)", color: "#818cf8", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "0.85rem" }}>
+                            {student.name ? student.name.charAt(0).toUpperCase() : "?"}
+                          </div>
+                        )}
+                        <span>{student.name}</span>
+                      </div>
+                    </td>
                     <td>Room {student.roomNo}</td>
                     <td>{student.className}</td>
                     <td>{student.personalMobile || student.parentMobile || "-"}</td>
@@ -406,10 +480,54 @@ export default function StudentManager() {
                     <input type="text" className="form-input" value={otherInfo} onChange={(e) => setOtherInfo(e.target.value)} placeholder="Allergies, emergency info..." />
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <Camera size={16} /> Profile Photo (Cloudinary)
+                  </label>
+                  {profilePreview && (
+                    <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                      <div style={{ position: "relative" }}>
+                        <img 
+                          src={profilePreview} 
+                          alt="Preview" 
+                          style={{ width: "90px", height: "90px", borderRadius: "50%", objectFit: "cover", border: "2px solid #818cf8" }} 
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => { setProfileFile(null); setProfilePreview(""); }} 
+                          style={{ position: "absolute", top: 0, right: 0, background: "#f87171", border: "none", borderRadius: "50%", width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", color: "white", cursor: "pointer", fontSize: "10px" }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="form-input" 
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setProfileFile(file);
+                        setProfilePreview(URL.createObjectURL(file));
+                      }
+                    }} 
+                    disabled={uploadingPhoto}
+                  />
+                  {!CLOUDINARY_CLOUD_NAME && (
+                    <p style={{ fontSize: "0.75rem", color: "#f87171", marginTop: "0.25rem" }}>
+                      ⚠️ Cloudinary is not configured. Please add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET to your .env file.
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>CANCEL</button>
-                <button type="submit" className="btn btn-primary">REGISTER</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)} disabled={uploadingPhoto}>CANCEL</button>
+                <button type="submit" className="btn btn-primary" disabled={uploadingPhoto}>
+                  {uploadingPhoto ? "UPLOADING PHOTO..." : "REGISTER"}
+                </button>
               </div>
             </form>
           </div>
@@ -489,10 +607,54 @@ export default function StudentManager() {
                     <input type="text" className="form-input" value={otherInfo} onChange={(e) => setOtherInfo(e.target.value)} />
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <Camera size={16} /> Profile Photo (Cloudinary)
+                  </label>
+                  {profilePreview && (
+                    <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                      <div style={{ position: "relative" }}>
+                        <img 
+                          src={profilePreview} 
+                          alt="Preview" 
+                          style={{ width: "90px", height: "90px", borderRadius: "50%", objectFit: "cover", border: "2px solid #818cf8" }} 
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => { setProfileFile(null); setProfilePreview(""); }} 
+                          style={{ position: "absolute", top: 0, right: 0, background: "#f87171", border: "none", borderRadius: "50%", width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", color: "white", cursor: "pointer", fontSize: "10px" }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="form-input" 
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setProfileFile(file);
+                        setProfilePreview(URL.createObjectURL(file));
+                      }
+                    }} 
+                    disabled={uploadingPhoto}
+                  />
+                  {!CLOUDINARY_CLOUD_NAME && (
+                    <p style={{ fontSize: "0.75rem", color: "#f87171", marginTop: "0.25rem" }}>
+                      ⚠️ Cloudinary is not configured. Please add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET to your .env file.
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsEditOpen(false)}>CANCEL</button>
-                <button type="submit" className="btn btn-primary">UPDATE</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsEditOpen(false)} disabled={uploadingPhoto}>CANCEL</button>
+                <button type="submit" className="btn btn-primary" disabled={uploadingPhoto}>
+                  {uploadingPhoto ? "UPLOADING PHOTO..." : "UPDATE"}
+                </button>
               </div>
             </form>
           </div>
