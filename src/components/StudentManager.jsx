@@ -309,7 +309,22 @@ export default function StudentManager() {
     s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.roomNo?.includes(searchQuery) ||
     s.id?.includes(searchQuery)
-  );
+  ).sort((a, b) => {
+    const classA = (a.className || "").trim();
+    const classB = (b.className || "").trim();
+    
+    const indexA = CLASSES.indexOf(classA);
+    const indexB = CLASSES.indexOf(classB);
+    
+    const finalIdxA = indexA !== -1 ? indexA : CLASSES.length;
+    const finalIdxB = indexB !== -1 ? indexB : CLASSES.length;
+    
+    if (finalIdxA !== finalIdxB) {
+      return finalIdxA - finalIdxB;
+    }
+    
+    return (a.name || "").localeCompare(b.name || "");
+  });
 
   return (
     <div>
