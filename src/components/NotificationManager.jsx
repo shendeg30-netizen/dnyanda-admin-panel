@@ -55,6 +55,23 @@ export default function NotificationManager() {
 
       await set(ref(db, `notifications/${notifId}`), newNotif);
 
+      // Trigger FCM push notification via Vercel serverless function
+      try {
+        await fetch("/api/send-notification", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-notification-secret": "dnyanda_notification_secure_secret_token_key"
+          },
+          body: JSON.stringify({
+            title: title.trim(),
+            body: message.trim()
+          })
+        });
+      } catch (fcmErr) {
+        console.error("Failed to trigger FCM push notification:", fcmErr);
+      }
+
       setTitle("");
       setMessage("");
     } catch (err) {
